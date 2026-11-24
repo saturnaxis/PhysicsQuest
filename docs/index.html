@@ -8,22 +8,35 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icons/icon-192.png">
   <title>Physics Quest: Exoplanet Explorer</title>
-  <script type="module" crossorigin src="./assets/index-D_StV0pZ.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-BjqRYqF6.css">
+  <script type="module" crossorigin src="./assets/index-mTzbwbbB.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-DzHfZhsA.css">
 </head>
 <body>
-  <main id="game" aria-label="Physics Quest astronomy platform game"></main>
-  <div id="touch-controls" role="group" aria-label="Touch controls" hidden>
-    <div class="directions">
-      <button type="button" data-control="left" aria-label="Move left">◀</button>
-      <button type="button" data-control="right" aria-label="Move right">▶</button>
+  <div id="game-shell">
+    <main id="game" aria-label="Physics Quest astronomy platform game"></main>
+    <div id="touch-controls" role="group" aria-label="Touch controls" hidden>
+      <div class="directions">
+        <button type="button" data-control="left" aria-label="Move left">◀</button>
+        <button type="button" data-control="right" aria-label="Move right">▶</button>
+      </div>
+      <button type="button" data-control="pause">Pause</button>
+      <div class="actions">
+        <button type="button" data-control="scan">Scan</button>
+        <button type="button" data-control="jump">Jump</button>
+      </div>
     </div>
-    <button type="button" data-control="pause">Pause</button>
-    <div class="actions">
-      <button type="button" data-control="scan">Scan</button>
-      <button type="button" data-control="jump">Jump</button>
-    </div>
+    <button id="fullscreen" type="button" hidden>Full screen</button>
+    <section id="game-card" role="dialog" aria-modal="true" aria-labelledby="card-title" hidden>
+      <div class="card-panel">
+        <div class="card-content">
+          <h2 id="card-title" tabindex="-1"></h2>
+          <p id="card-body"></p>
+          <p id="card-note"></p>
+        </div>
+        <div id="card-buttons"></div>
+      </div>
+    </section>
+    <aside id="rotate-hint">Rotate your device to play in landscape.</aside>
   </div>
-  <aside id="rotate-hint">Rotate your device to play in landscape.</aside>
 </body>
 </html>
