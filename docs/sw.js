@@ -1,5 +1,5 @@
-const VERSION = "c0b147ccf26d6d86";
-const PRECACHE = ["./assets/audio/beneath-the-crust.mp3","./assets/audio/conjugated-chains.mp3","./assets/audio/electron-highway.mp3","./assets/audio/eureka-loop.mp3","./assets/audio/keplers-horizon.mp3","./assets/audio/laws-in-motion.mp3","./assets/audio/mapping-the-zenith.mp3","./assets/audio/planet-x.mp3","./assets/audio/under-the-stellar-current.mp3","./assets/index-DzHfZhsA.css","./assets/index-mTzbwbbB.js","./icons/icon-192.png","./icons/icon-512.png","./icons/icon-maskable.png","./index.html","./manifest.webmanifest"];
+const VERSION = "134e2356942f304b";
+const PRECACHE = ["./assets/audio/beneath-the-crust.mp3","./assets/audio/conjugated-chains.mp3","./assets/audio/electron-highway.mp3","./assets/audio/eureka-loop.mp3","./assets/audio/keplers-horizon.mp3","./assets/audio/laws-in-motion.mp3","./assets/audio/mapping-the-zenith.mp3","./assets/audio/planet-x.mp3","./assets/audio/under-the-stellar-current.mp3","./assets/index-CssSYsmJ.js","./assets/index-Dbg5lb1k.css","./icons/icon-192.png","./icons/icon-512.png","./icons/icon-maskable.png","./index.html","./manifest.webmanifest"];
 const cachePrefix = 'physics-quest:' + self.registration.scope + ':';
 const cacheName = cachePrefix + VERSION;
 const shell = new URL('./index.html', self.registration.scope).href;
