@@ -13,27 +13,26 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
-    name: Build and upload the PWA
+  package:
+    name: Verify and upload docs
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
       - uses: actions/configure-pages@v5
-      - run: npm ci
-      - run: npm test
-      - run: npm run build -- --base=./
+      - name: Verify the prebuilt PWA
+        run: |
+          test -s docs/index.html
+          test -s docs/manifest.webmanifest
+          test -s docs/sw.js
+          grep -Fq 'id="game-card"' docs/index.html
       - uses: actions/upload-pages-artifact@v3
         with:
           name: github-pages
-          path: dist
+          path: docs
 
   deploy:
     name: Publish to GitHub Pages
-    needs: build
+    needs: package
     runs-on: ubuntu-latest
     permissions:
       pages: write
