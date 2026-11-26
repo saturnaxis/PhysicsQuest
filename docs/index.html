@@ -8,19 +8,27 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icons/icon-192.png">
   <title>Physics Quest: Exoplanet Explorer</title>
-  <script type="module" crossorigin src="./assets/index-CssSYsmJ.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-Dbg5lb1k.css">
   <script async src="https://www.googletagmanager.com/gtm.js?id=GTM-TXMJ9GXB"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-</script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+  </script>
+  <script type="module" crossorigin src="./assets/index-CjirhT2V.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-sDb3f3f2.css">
 </head>
-
 <body>
   <div id="game-shell">
-    <main id="game" aria-label="Physics Quest astronomy platform game"></main>
+    <main id="game" aria-label="Physics Quest astronomy platform game">
+      <div id="discovery-announcements" role="status" aria-atomic="true">
+        <div id="discovery-toast" hidden></div>
+      </div>
+    </main>
+    <dialog id="discovery-journal" aria-labelledby="journal-title">
+      <h2 id="journal-title">Discovery Journal</h2>
+      <form method="dialog"><button type="submit" autofocus>Close</button></form>
+      <div id="journal-entries" tabindex="0"></div>
+    </dialog>
     <div id="touch-controls" role="group" aria-label="Touch controls" hidden>
       <div class="directions">
         <button type="button" data-control="left" aria-label="Move left">◀</button>

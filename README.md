@@ -15,7 +15,7 @@ Open the GitHub Pages address shown under **Settings → Pages**. Select a resea
 | Move | A/D or left/right arrows | Left stick | Hold an arrow |
 | Jump or double jump | Space, W, or up arrow | A | Tap **Jump**, then tap again in midair |
 | Toggle the research scanner | E | X | **Scan** |
-| Dismiss a discovery card | Space or Enter | A | **Continue** |
+| Open the Discovery Journal (main menu) | J | — | **Discovery Journal** |
 | Pause or resume | P | | **Pause** or **Resume** on touchscreens |
 | Return to the menu | Esc or Q | B | **MAIN MENU** |
 | Restart the level | R | | **Play again** on the results card |
@@ -46,7 +46,7 @@ Choose Lion Cub, Lion Scientist, Einstein, or Marie Curie. All four have the sam
 | Physics Education | **PER-1 · Motion Laboratory** | Compare motion regimes using a live position–time graph. |
 | Physics Education | **PER-2 · Learning Through Discovery** | Complete three predict–observe–explain stations. Choose an answer by tapping it, pressing 1/2, or selecting with left/right and confirming with Enter or gamepad A. A correct explanation earns 500 points before bonuses. |
 
-Discovery cards explain the underlying science and identify the arcade simplifications. The alpha, beta, gamma, infrared, and X-ray hazards use stylized colors, distances, and timing. The neutron-star cards distinguish established findings from proposed interior models.
+Discoveries appear briefly below the upper-left HUD while you play. The Discovery Journal on the main menu saves the full science explanations and arcade simplifications on your device. The alpha, beta, gamma, infrared, and X-ray hazards use stylized colors, distances, and timing. The neutron-star cards distinguish established findings from proposed interior models.
 
 | Area | Power-ups |
 | --- | --- |
@@ -59,7 +59,7 @@ Discovery cards explain the underlying science and identify the arcade simplific
 ## Install on a phone or tablet
 
 1. Open the deployed HTTPS site. In **Android Chrome**, use **Install app** or **Add to Home screen**. In **Safari on iPhone or iPad**, use **Share → Add to Home Screen** and enable **Open as Web App** if shown.
-2. Launch the game from its home-screen icon and rotate to landscape. Hold a movement arrow with one thumb and tap **Jump** or **Scan** with the other. Discovery cards, lab answers, and mission results use touch-friendly buttons.
+2. Launch the game from its home-screen icon and rotate to landscape. Hold a movement arrow with one thumb and tap **Jump** or **Scan** with the other. The Discovery Journal, lab answers, and mission results use touch-friendly buttons.
 3. For offline play, launch online first and allow the game and music to finish caching. To check the cache, turn on airplane mode and relaunch.
 
 When updating an installed copy, close open game tabs and app windows, then reopen online.
@@ -88,7 +88,7 @@ The production build writes `dist/` and generates a service worker with the offl
 | Method | Steps |
 | --- | --- |
 | **Publish from `docs/`** | Copy the prebuilt export or the contents of `dist/` into `docs/`. Commit to `main`. Under **Settings → Pages**, choose **Deploy from a branch**, then **main** and **/docs**. |
-| **Build with GitHub Actions** | Push the source and `.github/workflows/pages.yml` to `main`. Under **Settings → Pages**, choose **GitHub Actions**. Push a commit or run the workflow manually. It installs dependencies, runs tests, builds with relative asset paths, and publishes `dist/`. |
+| **Build with GitHub Actions** | Push the source and `.github/workflows/pages.yml` to `main`. Under **Settings → Pages**, choose **GitHub Actions**. Rebuild with relative asset paths, copy the contents of `dist/` into `docs/`, and include the updated `docs/` files in your commit. The workflow publishes `docs/` on pushes to `main` or when run manually. |
 
 Keep `index.html`, `.nojekyll`, `sw.js`, `manifest.webmanifest`, `icons/`, and `assets/` together when publishing prebuilt files. Open the published URL listed under **Settings → Pages** after deployment.
 
