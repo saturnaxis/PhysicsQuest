@@ -6,6 +6,16 @@ Development releases use `0.Y.XX`. Increase `Y` for a major development mileston
 
 The earlier v15–v18 releases are mapped below from the original README. Their legacy labels are shown alongside the new milestone numbers.
 
+## 0.6.00 · Mobile QR launch
+
+- Added a branded portrait welcome, landscape rotation cue, and a direct start for Exoplanet Explorer alongside the eight-level menu.
+- Separated the touch controls from the playfield and updated their styling while keeping edge clearance and touch target sizes.
+- Added consistent sample and health icons, segmented scanner and power-up timers, checkpoint activation markers, in-world power-up cues, and point award popups.
+
+## 0.5.05
+
+- Added a main-menu update check, an **Update now** button, and a running version display for confirming the update after restart.
+
 ## 0.5.04
 
 - GitHub Actions now tests and builds the PWA from source and publishes the generated output directly. Removed the duplicate checked-in `docs/` export.

@@ -8,6 +8,10 @@ self.addEventListener('install', event => {
   event.waitUntil(caches.open(cacheName).then(cache => cache.addAll(requests)));
 });
 
+self.addEventListener('message', event => {
+  if (event.data === 'PHYSICS_QUEST_ACTIVATE_UPDATE') event.waitUntil(self.skipWaiting());
+});
+
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     const names = await caches.keys();

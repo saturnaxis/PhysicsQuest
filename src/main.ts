@@ -4,12 +4,12 @@ import { touchControls } from './touchControls';
 import { hideCard, showCard } from './card';
 import { animateDiscovery, hideDiscovery, openJournal, journal, recordDiscovery } from './discovery';
 import { toggleFullscreen } from './fullscreen';
+import { showGameUpdates } from './gameUpdates';
+import { drawHealth, drawTimer, scorePopup } from './playFeedback';
 
-if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('./sw.js').catch(error => console.warn('Offline setup failed', error));
-  });
-}
+const shell = document.querySelector<HTMLElement>('#game-shell')!;
+const quickStart = document.querySelector<HTMLButtonElement>('#first-expedition')!;
+const isTouchLayout = () => document.documentElement.classList.contains('touch-layout');
 import {RESEARCH_LESSONS,makeResearchLedges,EXPERIMENTS,type ResearchZone} from './researchData';
 import {AVATARS,POWERUPS,powerKind,layoutSeed,seededRandom,protectedXs,safeGroundX,variedPlatformX,type PowerKind} from './variety';
 import {RAYS,RESEARCH_ENEMIES,rayPhase,rayProgress,secretCollisionEnabled,type RayKind,type EnemyMotion} from './radiation';
@@ -43,7 +43,16 @@ window.addEventListener('pointerdown',resumeMusic);window.addEventListener('keyd
 
 class BootScene extends Phaser.Scene{
   constructor(){super('boot')}
-  create(){this.makeTextures();this.scene.start('menu')}
+  create(){
+    this.makeTextures();
+    const lion = this.textures.get('lion').getSourceImage();
+    if (lion instanceof HTMLCanvasElement) {
+      const portrait = document.querySelector<HTMLImageElement>('#welcome-lion')!;
+      portrait.src = lion.toDataURL();
+      portrait.hidden = false;
+    }
+    this.scene.start('menu');
+  }
   makeTextures(){
     const g=this.add.graphics();
     const texture=(key:string,w:number,h:number,draw:()=>void)=>{g.clear();draw();g.generateTexture(key,w,h)};
@@ -52,7 +61,13 @@ class BootScene extends Phaser.Scene{
     texture('asteroid',96,38,()=>{g.fillStyle(0x332d49).fillRoundedRect(0,0,96,38,13);g.fillStyle(0x68617e).fillRoundedRect(3,2,90,28,11);g.fillStyle(0x8b83a0).fillRect(15,6,24,5);g.fillStyle(0x49435f).fillCircle(68,18,9).fillCircle(30,27,5)});
     texture('token',34,34,()=>{g.fillStyle(0xffdc5e).fillCircle(17,17,15);g.lineStyle(3,0xfff3a5).strokeCircle(17,17,13);g.fillStyle(0x36c5f0).fillCircle(16,16,8);g.fillStyle(0x55df8b).fillRect(11,11,7,4).fillRect(17,17,6,5);g.lineStyle(3,0xf59345).strokeEllipse(17,18,29,10)});
     texture('sample',34,34,()=>{g.fillStyle(0x132b50).fillCircle(17,17,16);g.lineStyle(2,0x7ce9ff).strokeEllipse(17,17,30,11).strokeEllipse(17,17,11,30);g.fillStyle(0xffffff).fillCircle(17,17,5);g.fillStyle(0xff6b8a).fillCircle(5,17,3).fillCircle(29,17,3)});
-    texture('checkpoint',46,70,()=>{g.fillStyle(0xe9f4ff).fillRect(5,2,6,66);g.fillStyle(0x5ce1e6).fillTriangle(11,5,44,17,11,31);g.fillStyle(0xffffff).fillCircle(8,65,7)});
+    for (const [key,color] of [['checkpoint',0x5ce1e6],['checkpoint-active',0xffd166]] as const) {
+      texture(key,46,70,()=> {
+        g.fillStyle(0xe9f4ff).fillRect(5,2,6,66);
+        g.fillStyle(color).fillTriangle(11,5,44,17,11,31);
+        g.fillStyle(0xffffff).fillCircle(8,65,7);
+      });
+    }
     texture('boost',46,50,()=>{g.fillStyle(0x7b5cff).fillRoundedRect(5,8,36,38,8);g.fillStyle(0x58e6e6).fillRect(11,3,9,12).fillRect(26,3,9,12);g.fillStyle(0xffd166).fillCircle(23,27,8);g.fillStyle(0xffffff).fillCircle(23,27,3)});
     texture('shield',48,52,()=>{g.fillStyle(0x43d9ff).fillCircle(24,25,22);g.lineStyle(4,0xffffff).strokeCircle(24,25,18);g.fillStyle(0x1768b5).fillTriangle(24,9,38,16,34,35).fillTriangle(24,9,10,16,14,35);g.fillStyle(0x9ff6ff).fillCircle(18,17,5)});
     texture('speed',50,48,()=>{g.fillStyle(0xffd166).fillTriangle(28,2,18,20,29,20).fillTriangle(22,46,32,27,21,27);g.fillStyle(0xff713f).fillTriangle(35,5,26,20,36,20).fillTriangle(29,43,38,27,28,27);g.lineStyle(3,0xffffff).strokeCircle(25,24,21)});
@@ -82,10 +97,22 @@ class MenuScene extends Phaser.Scene{
   selection=0;world=0;levelCards:Phaser.GameObjects.Rectangle[]=[];levelScenes:string[]=[];worldTabs:Phaser.GameObjects.Rectangle[]=[];levelPanel!:Phaser.GameObjects.Container;prevMenuAxis=0;prevMenuY=0;prevMenuA=false;musicVolume=readMusicVolume();volumeLabel!:Phaser.GameObjects.Text;
   constructor(){super('menu')}
   create(){
+    showGameUpdates(true);
+    quickStart.hidden = false;
+    quickStart.onclick = () => this.scene.start(RESEARCH_WORLDS[0].levels[0].scene);
+    quickStart.onkeydown = event => {
+      if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
+    };
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      showGameUpdates(false);
+      quickStart.hidden = true;
+      quickStart.onclick = null;
+      quickStart.onkeydown = null;
+    });
     this.musicVolume=readMusicVolume();playMusic('menu');this.events.once(Phaser.Scenes.Events.SHUTDOWN,stopMusic);
     this.cameras.main.setBackgroundColor('#06142f');for(let i=0;i<110;i++)this.add.circle(Phaser.Math.Between(0,GAME_WIDTH),Phaser.Math.Between(0,GAME_HEIGHT),Phaser.Math.Between(1,3),0xffffff,Phaser.Math.FloatBetween(.25,.9));
     this.add.text(52,34,'PHYSICS QUEST',{fontFamily:'Arial, sans-serif',fontSize:'26px',fontStyle:'900',color:'#5ce1e6'});this.add.text(52,68,'RESEARCH RUN',{fontFamily:'Arial, sans-serif',fontSize:'48px',fontStyle:'900',color:'#fff'});this.add.text(55,135,'CHOOSE A RESEARCH AREA',{fontFamily:'Arial, sans-serif',fontSize:'19px',fontStyle:'900',color:'#ffd166'});
-    const journalButton = this.add.text(GAME_WIDTH - 24, 34, 'DISCOVERY JOURNAL  •  J', {fontFamily:'Arial, sans-serif',fontSize:'16px',fontStyle:'bold',color:'#07152f',backgroundColor:'#ffd166',padding:{x:12,y:7}}).setOrigin(1,0).setInteractive({useHandCursor:true});
+    const journalButton = this.add.text(GAME_WIDTH - 24, 34, isTouchLayout()?'DISCOVERY JOURNAL':'DISCOVERY JOURNAL  •  J', {fontFamily:'Arial, sans-serif',fontSize:'16px',fontStyle:'bold',color:'#07152f',backgroundColor:'#ffd166',padding:{x:12,y:7}}).setOrigin(1,0).setInteractive({useHandCursor:true});
     const showJournal = () => {
       openJournal();
       if (this.input.keyboard) this.input.keyboard.enabled = false;
@@ -95,12 +122,12 @@ class MenuScene extends Phaser.Scene{
     };
     journalButton.on('pointerdown', showJournal);
     this.input.keyboard?.on('keydown-J', showJournal);
-    this.worldTabs=[];RESEARCH_WORLDS.forEach((w,i)=>{const x=167+i*220;const tab=this.add.rectangle(x,195,210,72,w.color,.85).setStrokeStyle(3,0x5ce1e6).setInteractive({useHandCursor:true});this.worldTabs.push(tab);this.add.text(x,179,w.name,{fontFamily:'Arial, sans-serif',fontSize:'18px',fontStyle:'900',color:'#fff'}).setOrigin(.5);this.add.text(x,207,w.subtitle,{fontFamily:'Arial, sans-serif',fontSize:'12px',color:'#d8f8ff'}).setOrigin(.5);tab.on('pointerdown',()=>this.selectWorld(i))});
+    this.worldTabs=[];RESEARCH_WORLDS.forEach((w,i)=>{const x=167+i*220;const tab=this.add.rectangle(x,195,210,isTouchLayout()?94:72,w.color,.85).setStrokeStyle(3,0x5ce1e6).setInteractive({useHandCursor:true});this.worldTabs.push(tab);this.add.text(x,179,w.name,{fontFamily:'Arial, sans-serif',fontSize:'18px',fontStyle:'900',color:'#fff'}).setOrigin(.5);this.add.text(x,207,w.subtitle,{fontFamily:'Arial, sans-serif',fontSize:'12px',color:'#d8f8ff'}).setOrigin(.5);tab.on('pointerdown',()=>this.selectWorld(i))});
     this.levelPanel=this.add.container(0,0);this.selectWorld(this.world);
     this.add.rectangle(970,260,480,260,0x081a35,.96).setStrokeStyle(4,0xffd166);this.add.text(970,151,'LOCAL HIGH SCORES',{fontFamily:'Arial, sans-serif',fontSize:'28px',fontStyle:'900',color:'#ffd166'}).setOrigin(.5);const scores=readScores();if(!scores.length)this.add.text(970,258,'No completed expeditions yet.\nBe the first explorer!',{fontFamily:'Arial, sans-serif',fontSize:'20px',color:'#8fa9c5',align:'center'}).setOrigin(.5);scores.forEach((s,i)=>{this.add.text(775,185+i*37,`${i+1}.  ${s.score.toLocaleString()} pts`,{fontFamily:'Arial, sans-serif',fontSize:'21px',fontStyle:'900',color:i===0?'#5ce1e6':'#eaf6ff'});this.add.text(1115,185+i*37,`${s.level??'EXO-1'}  ${Math.floor(s.seconds/60)}:${String(s.seconds%60).padStart(2,'0')}`,{fontFamily:'Arial, sans-serif',fontSize:'14px',color:'#9fbcdb'}).setOrigin(1,0)});
-    this.avatar=readAvatar();this.avatarCards=[];this.add.rectangle(970,495,480,178,0x081a35,.96).setStrokeStyle(3,0x5ce1e6);this.add.text(970,424,'CHOOSE YOUR AVATAR  •  C / X',{fontFamily:'Arial, sans-serif',fontSize:'18px',fontStyle:'900',color:'#ffd166'}).setOrigin(.5);AVATARS.forEach((a,i)=>{const x=800+i*113;const card=this.add.rectangle(x,498,103,108,0x17345c).setStrokeStyle(2,0x5ce1e6).setInteractive({useHandCursor:true});this.avatarCards.push(card);this.add.image(x,482,a.key).setScale(.95);this.add.text(x,527,a.name,{fontFamily:'Arial, sans-serif',fontSize:'12px',fontStyle:'900',color:'#fff',align:'center',wordWrap:{width:96}}).setOrigin(.5);card.on('pointerdown',()=>this.selectAvatar(i))});this.avatarLabel=this.add.text(970,570,'',{fontFamily:'Arial, sans-serif',fontSize:'13px',color:'#b9d4ef'}).setOrigin(.5);this.selectAvatar(this.avatar);this.input.keyboard?.on('keydown-C',()=>this.selectAvatar(this.avatar+1));
-    this.add.text(45,646,'Area: ↑ ↓ / D-pad   Level: ← → / stick   Select: Enter / A',{fontFamily:'Arial, sans-serif',fontSize:'15px',color:'#b9d4ef'});this.add.text(45,672,'Move: A D / ← → / stick    Jump: Space / ↑ / A ×2    E / X: Scan    P: Pause',{fontFamily:'Arial, sans-serif',fontSize:'14px',color:'#9fbcdb'});
-    this.add.text(795,672,'MUSIC',{fontFamily:'Arial, sans-serif',fontSize:'15px',fontStyle:'900',color:'#b9efff'}).setOrigin(0,.5);const down=this.add.text(900,672,'−',{fontFamily:'Arial, sans-serif',fontSize:'22px',fontStyle:'900',color:'#07152f',backgroundColor:'#5ce1e6',padding:{x:12,y:3}}).setOrigin(.5).setInteractive({useHandCursor:true});this.volumeLabel=this.add.text(955,672,'',{fontFamily:'Arial, sans-serif',fontSize:'17px',fontStyle:'900',color:'#fff'}).setOrigin(.5);const up=this.add.text(1010,672,'+',{fontFamily:'Arial, sans-serif',fontSize:'22px',fontStyle:'900',color:'#07152f',backgroundColor:'#5ce1e6',padding:{x:11,y:3}}).setOrigin(.5).setInteractive({useHandCursor:true});const mute=this.add.text(1090,672,'MUTE',{fontFamily:'Arial, sans-serif',fontSize:'14px',fontStyle:'900',color:'#07152f',backgroundColor:'#ffd166',padding:{x:12,y:7}}).setOrigin(.5).setInteractive({useHandCursor:true});this.add.text(1260,672,'[ / ] / M',{fontFamily:'Arial, sans-serif',fontSize:'13px',color:'#9fbcdb'}).setOrigin(1,.5);down.on('pointerdown',()=>this.changeVolume(-VOLUME_STEP));up.on('pointerdown',()=>this.changeVolume(VOLUME_STEP));mute.on('pointerdown',()=>this.setVolume(this.musicVolume>0?0:DEFAULT_MUSIC_VOLUME));this.input.keyboard?.on('keydown-OPEN_BRACKET',()=>this.changeVolume(-VOLUME_STEP));this.input.keyboard?.on('keydown-CLOSED_BRACKET',()=>this.changeVolume(VOLUME_STEP));this.input.keyboard?.on('keydown-M',()=>this.setVolume(this.musicVolume>0?0:DEFAULT_MUSIC_VOLUME));this.updateVolumeLabel();
+    this.avatar=readAvatar();this.avatarCards=[];this.add.rectangle(970,495,480,178,0x081a35,.96).setStrokeStyle(3,0x5ce1e6);this.add.text(970,424,isTouchLayout()?'CHOOSE YOUR AVATAR':'CHOOSE YOUR AVATAR  •  C / X',{fontFamily:'Arial, sans-serif',fontSize:'18px',fontStyle:'900',color:'#ffd166'}).setOrigin(.5);AVATARS.forEach((a,i)=>{const x=800+i*113;const card=this.add.rectangle(x,498,103,108,0x17345c).setStrokeStyle(2,0x5ce1e6).setInteractive({useHandCursor:true});this.avatarCards.push(card);this.add.image(x,482,a.key).setScale(.95);this.add.text(x,527,a.name,{fontFamily:'Arial, sans-serif',fontSize:'12px',fontStyle:'900',color:'#fff',align:'center',wordWrap:{width:96}}).setOrigin(.5);card.on('pointerdown',()=>this.selectAvatar(i))});this.avatarLabel=this.add.text(970,570,'',{fontFamily:'Arial, sans-serif',fontSize:'13px',color:'#b9d4ef'}).setOrigin(.5);this.selectAvatar(this.avatar);this.input.keyboard?.on('keydown-C',()=>this.selectAvatar(this.avatar+1));
+    this.add.text(45,646,isTouchLayout()?'Tap a research area, then a level.':'Area: ↑ ↓ / D-pad   Level: ← → / stick   Select: Enter / A',{fontFamily:'Arial, sans-serif',fontSize:'15px',color:'#b9d4ef'});if(!isTouchLayout())this.add.text(45,672,'Move: A D / ← → / stick    Jump: Space / ↑ / A ×2    E / X: Scan    P: Pause',{fontFamily:'Arial, sans-serif',fontSize:'14px',color:'#9fbcdb'});
+    this.add.text(795,672,'MUSIC',{fontFamily:'Arial, sans-serif',fontSize:'15px',fontStyle:'900',color:'#b9efff'}).setOrigin(0,.5);const down=this.add.text(900,672,'−',{fontFamily:'Arial, sans-serif',fontSize:'22px',fontStyle:'900',color:'#07152f',backgroundColor:'#5ce1e6',padding:{x:12,y:3}}).setOrigin(.5).setInteractive({useHandCursor:true});this.volumeLabel=this.add.text(955,672,'',{fontFamily:'Arial, sans-serif',fontSize:'17px',fontStyle:'900',color:'#fff'}).setOrigin(.5);const up=this.add.text(1010,672,'+',{fontFamily:'Arial, sans-serif',fontSize:'22px',fontStyle:'900',color:'#07152f',backgroundColor:'#5ce1e6',padding:{x:11,y:3}}).setOrigin(.5).setInteractive({useHandCursor:true});const mute=this.add.text(1090,672,'MUTE',{fontFamily:'Arial, sans-serif',fontSize:'14px',fontStyle:'900',color:'#07152f',backgroundColor:'#ffd166',padding:{x:12,y:7}}).setOrigin(.5).setInteractive({useHandCursor:true});if(!isTouchLayout())this.add.text(1260,672,'[ / ] / M',{fontFamily:'Arial, sans-serif',fontSize:'13px',color:'#9fbcdb'}).setOrigin(1,.5);down.on('pointerdown',()=>this.changeVolume(-VOLUME_STEP));up.on('pointerdown',()=>this.changeVolume(VOLUME_STEP));mute.on('pointerdown',()=>this.setVolume(this.musicVolume>0?0:DEFAULT_MUSIC_VOLUME));this.input.keyboard?.on('keydown-OPEN_BRACKET',()=>this.changeVolume(-VOLUME_STEP));this.input.keyboard?.on('keydown-CLOSED_BRACKET',()=>this.changeVolume(VOLUME_STEP));this.input.keyboard?.on('keydown-M',()=>this.setVolume(this.musicVolume>0?0:DEFAULT_MUSIC_VOLUME));this.updateVolumeLabel();
     this.input.keyboard?.on('keydown-UP',()=>this.selectWorld(this.world-1));this.input.keyboard?.on('keydown-DOWN',()=>this.selectWorld(this.world+1));this.input.keyboard?.on('keydown-LEFT',()=>this.selectLevel(this.selection-1));this.input.keyboard?.on('keydown-RIGHT',()=>this.selectLevel(this.selection+1));this.input.keyboard?.on('keydown-ENTER',()=>this.launch());this.input.keyboard?.on('keydown-SPACE',()=>this.launch());['ONE','TWO','THREE','FOUR'].forEach((key,i)=>this.input.keyboard?.on('keydown-'+key,()=>{if(i<this.levelScenes.length)this.launch(i)}));
   }
   selectWorld(index:number){this.world=Phaser.Math.Wrap(index,0,RESEARCH_WORLDS.length);const w=RESEARCH_WORLDS[this.world];this.worldTabs.forEach((t,i)=>t.setStrokeStyle(i===this.world?5:2,i===this.world?0xffd166:0x5ce1e6));this.levelPanel.removeAll(true);this.levelCards=[];this.levelScenes=w.levels.map(l=>l.scene);w.levels.forEach((l,i)=>{const x=220+(i%2)*325,y=328+Math.floor(i/2)*156;const card=this.add.rectangle(x,y,310,138,w.color,.9).setStrokeStyle(3,0x5ce1e6).setInteractive({useHandCursor:true});this.levelCards.push(card);const label=this.add.text(x-140,y-49,l.code+'  •  '+(i+1),{fontFamily:'Arial, sans-serif',fontSize:'14px',fontStyle:'900',color:'#5ce1e6'});const title=this.add.text(x-140,y-20,l.title,{fontFamily:'Arial, sans-serif',fontSize:'22px',fontStyle:'900',color:'#fff',wordWrap:{width:285}});const desc=this.add.text(x-140,y+38,l.subtitle,{fontFamily:'Arial, sans-serif',fontSize:'13px',color:'#d8f8ff'});this.levelPanel.add([card,label,title,desc]);card.on('pointerover',()=>this.selectLevel(i));card.on('pointerdown',()=>this.launch(i))});this.selectLevel(0)}
@@ -119,9 +146,19 @@ class LevelScene extends Phaser.Scene{
   researchHazards:Array<{sprite:Phaser.Physics.Arcade.Image;kind:RayKind;motion:EnemyMotion;name:string;x:number;y:number;phaseOffset:number;gfx:Phaser.GameObjects.Graphics;label:Phaser.GameObjects.Text;pedestal:Phaser.GameObjects.Rectangle}>=[];slowUntil=0;
   layoutRun=0;layoutRandom=seededRandom(0);zoneHud!:Phaser.GameObjects.Text;zoneEffects:Array<{x:number;width:number;label:string}>=[];evidenceBonus=false;activeJump:PowerKind='gravity';activeShield:PowerKind='shield';activeSpeed:PowerKind='speed';
   secrets:Array<{x:number;y:number;sample:Phaser.Physics.Arcade.Image;marker:Phaser.GameObjects.Text;ledge:Phaser.Physics.Arcade.Image;revealed:boolean}>=[];scanReady=0;scanUntil=0;bonus=0;prevPadX=false;scannerHud!:Phaser.GameObjects.Text;scanRing!:Phaser.GameObjects.Arc;visitedCheckpoints=new Set<number>();quakeUntil=0;quakeWarned=false;zoneVisited=new Set<string>();
-  player!:Phaser.Physics.Arcade.Sprite;cursors!:Phaser.Types.Input.Keyboard.CursorKeys;keys!:Record<string,Phaser.Input.Keyboard.Key>;platforms!:Phaser.Physics.Arcade.StaticGroup;moving:Phaser.Physics.Arcade.Image[]=[];tokens!:Phaser.Physics.Arcade.Group;powerups!:Phaser.Physics.Arcade.Group;antagonists!:Phaser.Physics.Arcade.Group;hazards:Phaser.GameObjects.Rectangle[]=[];checkpointPoints:Array<{x:number;y:number;respawnY:number}>=[];health=MAX_HEALTH;collected=0;score=0;levelStart=0;levelCode='EXO-1';introDiscovery='binary';missionLabel='EXOPLANET EXPEDITION';collectibleIcon='🪐';checkpoint={x:160,y:520};hud!:Phaser.GameObjects.Text;message!:Phaser.GameObjects.Text;paused=false;complete=false;boostUntil=0;shieldUntil=0;speedUntil=0;jumpsUsed=0;prevPadA=false;prevPadB=false;lastHurt=0;beamTimer=0;beamActive=false;discoverySeen=new Set<string>();scienceMilestones:Array<{x:number;key:string}>=[];music?:Phaser.Sound.BaseSound;
+  player!:Phaser.Physics.Arcade.Sprite;cursors!:Phaser.Types.Input.Keyboard.CursorKeys;keys!:Record<string,Phaser.Input.Keyboard.Key>;platforms!:Phaser.Physics.Arcade.StaticGroup;moving:Phaser.Physics.Arcade.Image[]=[];tokens!:Phaser.Physics.Arcade.Group;powerups!:Phaser.Physics.Arcade.Group;antagonists!:Phaser.Physics.Arcade.Group;hazards:Phaser.GameObjects.Rectangle[]=[];checkpointPoints:Array<{x:number;y:number;respawnY:number;flag:Phaser.Physics.Arcade.Image;marker:Phaser.GameObjects.Text}>=[];health=MAX_HEALTH;collected=0;score=0;levelStart=0;levelCode='EXO-1';introDiscovery='binary';missionLabel='EXOPLANET EXPEDITION';checkpoint={x:160,y:520};hud!:Phaser.GameObjects.Text;message!:Phaser.GameObjects.Text;paused=false;complete=false;boostUntil=0;shieldUntil=0;speedUntil=0;jumpsUsed=0;prevPadA=false;prevPadB=false;lastHurt=0;beamTimer=0;beamActive=false;discoverySeen=new Set<string>();scienceMilestones:Array<{x:number;key:string}>=[];music?:Phaser.Sound.BaseSound;
   constructor(key='level'){super(key)}
+  dataHud!:Phaser.GameObjects.Text;
+  timeHud!:Phaser.GameObjects.Text;
+  healthIcons!:Phaser.GameObjects.Graphics;
+  timerMeters!:Phaser.GameObjects.Graphics;
+  powerCues!:Phaser.GameObjects.Graphics;
+  powerLabels:Phaser.GameObjects.Text[]=[];
+  drawnHealth=-1;
+
   create(){
+    shell.classList.add('playing');
+    this.drawnHealth=-1;
     playMusic(this.levelCode);this.events.once(Phaser.Scenes.Events.SHUTDOWN,stopMusic);
     this.moving=[];this.hazards=[];this.checkpointPoints=[];this.scienceMilestones=[];this.secrets=[];this.visitedCheckpoints.clear();this.zoneVisited.clear();this.discoverySeen.clear();this.health=MAX_HEALTH;this.collected=0;this.score=0;this.checkpoint={x:160,y:520};this.paused=false;this.complete=false;this.boostUntil=0;this.shieldUntil=0;this.speedUntil=0;this.jumpsUsed=0;this.lastHurt=0;this.prevPadA=false;this.prevPadB=false;this.prevPadX=false;this.scanReady=0;this.scanUntil=0;this.bonus=0;this.quakeUntil=0;this.quakeWarned=false;this.physics.resume();this.layoutRun=runNumber(this.levelCode);this.layoutRandom=seededRandom(layoutSeed(this.levelCode,this.layoutRun));this.zoneEffects=[];this.evidenceBonus=false;this.activeJump=powerKind(this.levelCode,'gravity');this.activeShield=powerKind(this.levelCode,'shield');this.activeSpeed=powerKind(this.levelCode,'speed');this.discoveryQueue=[];this.discoveryTimer=undefined;this.researchHazards=[];this.slowUntil=0;
     this.physics.world.setBounds(0,0,WORLD_WIDTH,GAME_HEIGHT);this.cameras.main.setBounds(0,0,WORLD_WIDTH,GAME_HEIGHT);this.cameras.main.setBackgroundColor('#050a20');
@@ -130,16 +167,25 @@ class LevelScene extends Phaser.Scene{
     this.physics.add.collider(this.player,this.platforms);this.moving.forEach(p=>this.physics.add.collider(this.player,p));this.physics.add.overlap(this.player,this.tokens,(_,o)=>this.collect(o as Phaser.Physics.Arcade.Image));this.physics.add.overlap(this.player,this.powerups,(_,o)=>this.collectPowerup(o as Phaser.Physics.Arcade.Image));this.physics.add.overlap(this.player,this.antagonists,(_,o)=>this.hitAntagonist(o as Phaser.Physics.Arcade.Image));
     this.cameras.main.startFollow(this.player,true,.09,.09,-180,30);this.cursors=this.input.keyboard!.createCursorKeys();this.keys=this.input.keyboard!.addKeys('A,D,W,E,P,Q,R,F,ESC') as Record<string,Phaser.Input.Keyboard.Key>;
     this.hud=this.add.text(24,22,'',{fontFamily:'Arial, sans-serif',fontSize:'22px',fontStyle:'900',color:'#fff',stroke:'#07152f',strokeThickness:7}).setScrollFactor(0).setDepth(100);
-    this.scannerHud=this.add.text(24,57,'',{fontFamily:'Arial, sans-serif',fontSize:'15px',fontStyle:'900',color:'#8deeff',stroke:'#07152f',strokeThickness:5}).setScrollFactor(0).setDepth(100);this.scanRing=this.add.circle(0,0,20,0x5ce1e6,.08).setStrokeStyle(3,0x5ce1e6,.8).setDepth(9).setVisible(false);
-    this.zoneHud=this.add.text(24,79,'',{fontFamily:'Arial, sans-serif',fontSize:'14px',fontStyle:'900',color:'#ffd166',stroke:'#07152f',strokeThickness:4}).setScrollFactor(0).setDepth(100);
+    const counterStyle={fontFamily:'system-ui, sans-serif',fontSize:'22px',fontStyle:'bold',color:'#fff',stroke:'#07152f',strokeThickness:5};
+    this.dataHud=this.add.text(229,23,'',counterStyle).setScrollFactor(0).setDepth(100);
+    this.timeHud=this.add.text(446,23,'',counterStyle).setScrollFactor(0).setDepth(100);
+    this.healthIcons=this.add.graphics({x:348,y:28}).setScrollFactor(0).setDepth(101);
+    this.timerMeters=this.add.graphics().setScrollFactor(0).setDepth(101);
+    this.powerCues=this.add.graphics().setDepth(11);
+    this.powerLabels=Array.from({length:4},()=>this.add.text(0,103,'',{fontFamily:'system-ui, sans-serif',fontSize:'15px',fontStyle:'bold',color:'#fff',backgroundColor:'#07152f',padding:{x:4,y:2}}).setScrollFactor(0).setDepth(101));
+    this.add.image(211,37,this.levelCode.startsWith('EXO')?'token':'sample').setDisplaySize(24,24).setScrollFactor(0).setDepth(101);
+    this.scannerHud=this.add.text(92,55,'',{fontFamily:'Arial, sans-serif',fontSize:'15px',fontStyle:'900',color:'#8deeff',stroke:'#07152f',strokeThickness:5}).setScrollFactor(0).setDepth(100);this.scanRing=this.add.circle(0,0,20,0x5ce1e6,.08).setStrokeStyle(3,0x5ce1e6,.8).setDepth(9).setVisible(false);
+    this.zoneHud=this.add.text(24,82,'',{fontFamily:'Arial, sans-serif',fontSize:'14px',fontStyle:'900',color:'#ffd166',stroke:'#07152f',strokeThickness:4}).setScrollFactor(0).setDepth(100);
     this.message=this.add.text(GAME_WIDTH/2,105,'',{fontFamily:'Arial, sans-serif',fontSize:'21px',fontStyle:'900',color:'#07152f',backgroundColor:'#ffd166',padding:{x:18,y:10}}).setOrigin(.5).setScrollFactor(0).setDepth(100).setAlpha(0);
-    const quit=this.add.text(GAME_WIDTH-24,24,'ESC / Q / B  MAIN MENU',{fontFamily:'Arial, sans-serif',fontSize:'16px',fontStyle:'900',color:'#07152f',backgroundColor:'#ffd166',padding:{x:12,y:7}}).setOrigin(1,0).setScrollFactor(0).setDepth(400).setInteractive({useHandCursor:true});this.add.text(GAME_WIDTH-24,68,'P  PAUSE     F  FULLSCREEN',{fontFamily:'Arial, sans-serif',fontSize:'15px',color:'#bad2ec',stroke:'#07152f',strokeThickness:5}).setOrigin(1,0).setScrollFactor(0).setDepth(100);
+    const quit=this.add.text(GAME_WIDTH-24,24,isTouchLayout()?'MAIN MENU':'ESC / Q / B  MAIN MENU',{fontFamily:'Arial, sans-serif',fontSize:'16px',fontStyle:'900',color:'#07152f',backgroundColor:'#ffd166',padding:{x:12,y:7}}).setOrigin(1,0).setScrollFactor(0).setDepth(400).setInteractive({useHandCursor:true});if(!isTouchLayout())this.add.text(GAME_WIDTH-24,68,'P  PAUSE     F  FULLSCREEN',{fontFamily:'Arial, sans-serif',fontSize:'15px',color:'#bad2ec',stroke:'#07152f',strokeThickness:5}).setOrigin(1,0).setScrollFactor(0).setDepth(100);
     quit.on('pointerdown',()=>this.returnToMenu());this.input.keyboard!.on('keydown-P',()=>this.togglePause());this.input.keyboard!.on('keydown-ESC',()=>this.returnToMenu());this.input.keyboard!.on('keydown-Q',()=>this.returnToMenu());this.input.keyboard!.on('keydown-R',()=>this.scene.restart());this.input.keyboard!.on('keydown-F',()=>void toggleFullscreen());
     touchControls.attach(() => this.togglePause());
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       hideCard();
       this.clearDiscovery();
       touchControls.detach();
+      shell.classList.remove('playing');
     });
     this.levelStart=this.game.loop.time;this.showMessage(`${this.missionLabel} — collect ${TOKEN_GOAL} data samples!`,2200);this.showDiscovery(this.introDiscovery);
   }
@@ -175,7 +221,7 @@ class LevelScene extends Phaser.Scene{
   updateScanner(time:number){
     const active=time<this.scanUntil;this.scanRing.setVisible(active);if(active){this.scanRing.setPosition(this.player.x,this.player.y).setRadius(150+20*Math.sin(time/120));for(const s of this.secrets){if(!s.revealed&&Math.abs(this.player.x-s.x)<370){s.revealed=true;s.ledge.setAlpha(1).setTint(0x8deeff);if(s.ledge.body){s.ledge.body.enable=secretCollisionEnabled(true);s.ledge.refreshBody()}s.sample.enableBody(true,s.x,s.y-52,true,true);s.marker.setText('BONUS +750');this.soundFeedback(740)}}}
     let identified='';for(const obj of this.antagonists.getChildren()){const a=obj as Phaser.Physics.Arcade.Image;if(!a.active)continue;if(active&&Math.abs(a.x-this.player.x)<370){a.setTint(0xffd166);identified=a.getData('ray')?RAYS[a.getData('ray') as RayKind].label+' RADIATION':String(a.getData('type')).replaceAll('-',' ').toUpperCase();const kind=a.getData('ray') as RayKind|undefined;if(kind&&!this.zoneVisited.has('ray:'+kind)){this.zoneVisited.add('ray:'+kind);this.showMessage(RAYS[kind].description+' (game signal)',2200)}}else a.clearTint()}
-    this.scannerHud.setText(`E / X SCAN: ${active?'ACTIVE':time<this.scanReady?`${Math.ceil((this.scanReady-time)/1000)}s`:'READY'}   •   SECRET DATA ${this.bonus}/3${this.levelCode==='EXO-2'?`   •   TRANSITS ${(this as unknown as TransitScene).evidence}/3`:''}${identified?`   •   ${identified}`:''}`);
+    this.scannerHud.setText(`${isTouchLayout()?'SCAN':'E / X SCAN'}: ${active?'ACTIVE':time<this.scanReady?`${Math.ceil((this.scanReady-time)/1000)}s`:'READY'}   •   SECRET DATA ${this.bonus}/3${this.levelCode==='EXO-2'?`   •   TRANSITS ${(this as unknown as TransitScene).evidence}/3`:''}${identified?`   •   ${identified}`:''}`);
   }
   scienceZone(x:number,width:number,label:string,color:number){this.zoneEffects.push({x,width,label});const g=this.add.graphics().setDepth(1);for(let i=0;i<9;i++){const px=x-width/2+30+i*(width-60)/8;g.fillStyle(color,.12).fillCircle(px,530+Math.sin(i*1.8)*28,6);g.lineStyle(2,color,.25).lineBetween(px-12,545,px+12,535)}this.add.text(x,410,label,{fontFamily:'Arial, sans-serif',fontSize:'16px',fontStyle:'900',color:'#d8f8ff',stroke:'#07152f',strokeThickness:5,align:'center'}).setOrigin(.5).setDepth(2)}
   createScienceFeatures(){
@@ -199,9 +245,14 @@ class LevelScene extends Phaser.Scene{
   platform(x:number,y:number,move=0){if(!move){const p=this.platforms.create(x,y,'asteroid') as Phaser.Physics.Arcade.Image;p.setSize(88,28).setOffset(4,5).refreshBody();return p}const p=this.physics.add.image(x,y,'asteroid').setImmovable(true);const body=p.body as Phaser.Physics.Arcade.Body;body.setAllowGravity(false);body.setSize(88,28).setOffset(4,5);p.setData('minX',x-move);p.setData('maxX',x+move);p.setData('direction',this.layoutRandom()<.5?-1:1);p.setVelocityX(70*p.getData('direction'));this.moving.push(p);return p}
   token(x:number,y:number){const t=this.tokens.create(x,y,'token') as Phaser.Physics.Arcade.Image;t.setData('baseY',y);t.setData('phase',Phaser.Math.FloatBetween(0,6.28));this.tweens.add({targets:t,angle:360,duration:1800,repeat:-1});return t}
   powerup(x:number,y:number,key:string,type:string){const kind=powerKind(this.levelCode,type);const p=this.powerups.create(x,y,POWERUPS[kind]?.texture??key) as Phaser.Physics.Arcade.Image;p.setData('type',kind);this.tweens.add({targets:p,y:y-10,duration:850,yoyo:true,repeat:-1,ease:'Sine.inOut'});return p}
-  checkpointFlag(x:number,y:number,respawnY:number){this.checkpointPoints.push({x,y,respawnY});return this.physics.add.staticImage(x,y,'checkpoint').setDepth(6)}
+  checkpointFlag(x:number,y:number,respawnY:number){
+    const flag=this.physics.add.staticImage(x,y,'checkpoint').setDepth(6);
+    const marker=this.add.text(x+12,y-43,'✓',{fontSize:'22px',fontStyle:'bold',color:'#ffd166',stroke:'#07152f',strokeThickness:4}).setOrigin(.5).setDepth(7).setVisible(false);
+    this.checkpointPoints.push({x,y,respawnY,flag,marker});
+    return flag;
+  }
   antagonist(x:number,y:number,key:string,type:string,range=70){const a=this.antagonists.create(x,y,key) as Phaser.Physics.Arcade.Image;a.setData('type',type);a.setData('baseY',y);a.setData('phase',Phaser.Math.FloatBetween(0,6.28));a.setData('range',range);a.body?.setSize(52,40);this.tweens.add({targets:a,angle:key==='binaryEnemy'?360:8,duration:2600,yoyo:key!=='binaryEnemy',repeat:-1});return a}
-  hitAntagonist(a:Phaser.Physics.Arcade.Image){const body=this.player.body as Phaser.Physics.Arcade.Body;const enemy=a.body as Phaser.Physics.Arcade.Body;if(a.getData('ray')&&a.getData('motion')!=='patrol'&&a.getData('motion')!=='oscillate'){if(a.getData('motion')==='trap')this.slowUntil=this.time.now+2200;this.hurt();return}if(body.velocity.y>120&&body.bottom<=enemy.top+26){a.disableBody(true,true);this.score+=200;this.player.setVelocityY(-440);this.jumpsUsed=1;this.soundFeedback(850);this.showMessage('HAZARD NEUTRALIZED   +200',1100);return}if(this.time.now-this.lastHurt<1500)return;const labels:Record<string,string>={'background-binary':'FALSE POSITIVE: BACKGROUND BINARY','stellar-noise':'STELLAR NOISE CAN MIMIC A DIP','systematic-noise':'INSTRUMENTAL GLITCH — CHECK THE DATA','impact':'IMPACT HAZARD — ROCKY WORLDS ARE ACTIVE','wind':'EXTREME WINDS IN A DEEP ATMOSPHERE','crustquake':'CRUSTQUAKE — DENSE MATTER FRACTURES','vortex':'SUPERFLUID VORTEX — KEEP CLEAR','molecular-disorder':'MOLECULAR DISORDER — REDUCED MOBILITY','charge-trap':'CHARGE TRAP — CARRIER CAPTURE','measurement-noise':'MEASUREMENT NOISE — CHECK DATA','misconception':'MISCONCEPTION — TEST WITH EVIDENCE'};this.score=Math.max(0,this.score-75);this.hurt();this.showMessage(`${labels[a.getData('type')]??'RESEARCH HAZARD'}   −75`,1200)}
+  hitAntagonist(a:Phaser.Physics.Arcade.Image){const body=this.player.body as Phaser.Physics.Arcade.Body;const enemy=a.body as Phaser.Physics.Arcade.Body;if(a.getData('ray')&&a.getData('motion')!=='patrol'&&a.getData('motion')!=='oscillate'){if(a.getData('motion')==='trap')this.slowUntil=this.time.now+2200;this.hurt();return}if(body.velocity.y>120&&body.bottom<=enemy.top+26){a.disableBody(true,true);this.score+=200;scorePopup(this,a.x,a.y,200);this.player.setVelocityY(-440);this.jumpsUsed=1;this.soundFeedback(850);this.showMessage('HAZARD NEUTRALIZED   +200',1100);return}if(this.time.now-this.lastHurt<1500)return;const labels:Record<string,string>={'background-binary':'FALSE POSITIVE: BACKGROUND BINARY','stellar-noise':'STELLAR NOISE CAN MIMIC A DIP','systematic-noise':'INSTRUMENTAL GLITCH — CHECK THE DATA','impact':'IMPACT HAZARD — ROCKY WORLDS ARE ACTIVE','wind':'EXTREME WINDS IN A DEEP ATMOSPHERE','crustquake':'CRUSTQUAKE — DENSE MATTER FRACTURES','vortex':'SUPERFLUID VORTEX — KEEP CLEAR','molecular-disorder':'MOLECULAR DISORDER — REDUCED MOBILITY','charge-trap':'CHARGE TRAP — CARRIER CAPTURE','measurement-noise':'MEASUREMENT NOISE — CHECK DATA','misconception':'MISCONCEPTION — TEST WITH EVIDENCE'};this.score=Math.max(0,this.score-75);this.hurt();this.showMessage(`${labels[a.getData('type')]??'RESEARCH HAZARD'}   −75`,1200)}
   buildLevel(){
     GROUND_SEGMENTS.forEach(([start,end])=>this.ground(start,610,end-start));
     [[430,525,0],[650,485,0],[860,445,120],[1080,500,0],[1420,430,0],[1740,350,160],[1980,500,0],[2350,420,110],[2750,510,0],[3150,410,160],[3570,320,0],[3820,500,0],[4300,430,150],[4580,330,0],[4990,480,120],[5450,390,0],[5850,500,130],[6270,405,0],[6660,330,150],[7120,480,0],[7520,390,0],[7910,300,180],[8260,470,0]].forEach(v=>this.platform(...v as [number,number,number]));
@@ -213,8 +264,8 @@ class LevelScene extends Phaser.Scene{
     [3400,6150].forEach((x,i)=>this.createPulsar(x,i));const goal=this.physics.add.staticImage(9020,520,'goal');goal.setData('goal',true);
   }
   createPulsar(x:number,index:number){const star=this.add.image(x,190,'pulsar').setDepth(4);const beam=this.add.rectangle(x,190,730,24,0x58e6ff,.18).setOrigin(0,.5).setDepth(3);beam.setData('originX',x);beam.setData('index',index);this.hazards.push(beam);this.tweens.add({targets:star,angle:360,duration:2800+index*500,repeat:-1});}
-  collect(t:Phaser.Physics.Arcade.Image){t.disableBody(true,true);if(t.getData('bonus')){const secret=this.secrets.find(s=>s.sample===t);secret?.marker.setText('DATA FOUND ✓');this.bonus++;this.score+=750;this.soundFeedback(880);this.showMessage('SECRET RESEARCH SAMPLE   +750',1500);return}this.collected++;const reward=this.levelCode==='PER-1'&&this.evidenceBonus?500:250;if(reward===500)this.evidenceBonus=false;this.score+=reward;this.soundFeedback(620);this.showMessage(`DATA COLLECTED  ${this.collected} / ${TOKEN_GOAL}   +${reward}`,900);if(this.collected===1&&this.levelCode==='EXO-1')this.showDiscovery('exoplanet')}
-  collectPowerup(p:Phaser.Physics.Arcade.Image){const type=p.getData('type') as PowerKind;const info=POWERUPS[type];p.disableBody(true,true);this.score+=150;this.soundFeedback(760);if(type==='gravity'||type==='energy'||type==='spring'){this.activeJump=type;this.boostUntil=this.time.now+16000;if(type==='gravity')this.showDiscovery('gravity')}if(type==='shield'||type==='exciton'){this.activeShield=type;this.shieldUntil=this.time.now+18000}if(type==='speed'||type==='mobility'||type==='motion'){this.activeSpeed=type;this.speedUntil=this.time.now+14000}if(type==='evidence')this.evidenceBonus=true;this.showMessage(`${info.name.toUpperCase()} — ${info.effect.toUpperCase()}  +150`,1800)}
+  collect(t:Phaser.Physics.Arcade.Image){t.disableBody(true,true);if(t.getData('bonus')){const secret=this.secrets.find(s=>s.sample===t);secret?.marker.setText('DATA FOUND ✓');this.bonus++;this.score+=750;scorePopup(this,t.x,t.y,750);this.soundFeedback(880);this.showMessage('SECRET RESEARCH SAMPLE   +750',1500);return}this.collected++;const reward=this.levelCode==='PER-1'&&this.evidenceBonus?500:250;if(reward===500)this.evidenceBonus=false;this.score+=reward;scorePopup(this,t.x,t.y,reward);this.soundFeedback(620);this.showMessage(`DATA COLLECTED  ${this.collected} / ${TOKEN_GOAL}   +${reward}`,900);if(this.collected===1&&this.levelCode==='EXO-1')this.showDiscovery('exoplanet')}
+  collectPowerup(p:Phaser.Physics.Arcade.Image){const type=p.getData('type') as PowerKind;const info=POWERUPS[type];p.disableBody(true,true);this.score+=150;scorePopup(this,p.x,p.y,150);this.soundFeedback(760);if(type==='gravity'||type==='energy'||type==='spring'){this.activeJump=type;this.boostUntil=this.time.now+16000;if(type==='gravity')this.showDiscovery('gravity')}if(type==='shield'||type==='exciton'){this.activeShield=type;this.shieldUntil=this.time.now+18000}if(type==='speed'||type==='mobility'||type==='motion'){this.activeSpeed=type;this.speedUntil=this.time.now+14000}if(type==='evidence')this.evidenceBonus=true;this.showMessage(`${info.name.toUpperCase()} — ${info.effect.toUpperCase()}  +150`,1800)}
   soundFeedback(freq:number){try{feedbackContext=feedbackContext??new AudioContext();const ac=feedbackContext;if(ac.state==='suspended')void ac.resume();const o=ac.createOscillator();const gain=ac.createGain();o.frequency.value=freq;o.connect(gain);gain.connect(ac.destination);gain.gain.setValueAtTime(.06,ac.currentTime);gain.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.12);o.start();o.stop(ac.currentTime+.12)}catch{}}
   showMessage(text:string,ms=1200){this.message.setText(text).setAlpha(1);this.time.delayedCall(ms,()=>this.message.setAlpha(0))}
   showDiscovery(key: string) {
@@ -269,14 +320,63 @@ class LevelScene extends Phaser.Scene{
     this.moving.forEach(p=>{const minX=p.getData('minX');const maxX=p.getData('maxX');let direction=p.getData('direction');if(p.x<=minX)direction=1;if(p.x>=maxX)direction=-1;p.setData('direction',direction);p.setVelocityX((65+Math.floor(p.x/2300)*8+(time<this.quakeUntil?25:0))*direction)});
     this.tokens.getChildren().forEach(o=>{const t=o as Phaser.Physics.Arcade.Image;if(t.active)t.y=t.getData('baseY')+Math.sin(time/350+t.getData('phase'))*7});
     this.antagonists.getChildren().forEach(o=>{const a=o as Phaser.Physics.Arcade.Image;if(a.active&&!a.getData('ray'))a.y=a.getData('baseY')+Math.sin(time/500+a.getData('phase'))*Math.min(22,a.getData('range'))});this.updateResearchHazards(time);
-    this.updateInteractions();this.updateBeams(time);const elapsed=Math.floor((time-this.levelStart)/1000);const powers=[time<this.boostUntil?POWERUPS[this.activeJump].hud:'',time<this.shieldUntil?POWERUPS[this.activeShield].hud:'',time<this.speedUntil?POWERUPS[this.activeSpeed].hud:'',this.evidenceBonus?'2× EVIDENCE':''].filter(Boolean).join(' • ');this.hud.setText(`SCORE ${this.score.toLocaleString()}     ${this.collectibleIcon} ${this.collected}/${TOKEN_GOAL}     ${'♥'.repeat(this.health)}${'♡'.repeat(MAX_HEALTH-this.health)}     ${Math.floor(elapsed/60)}:${String(elapsed%60).padStart(2,'0')}${powers?`     ${powers}`:''}`);
+    this.updateInteractions();
+    this.updateBeams(time);
+    this.updatePlayHud(time);
   }
-  updateInteractions(){const x=this.player.x;this.checkpointPoints.forEach((point,i)=>{if(Math.abs(x-point.x)<45&&this.checkpoint.x!==point.x){this.checkpoint={x:point.x,y:point.respawnY};const first=!this.visitedCheckpoints.has(point.x);this.visitedCheckpoints.add(point.x);if(first)this.score+=500;this.showMessage(first?'CHECKPOINT REACHED   +500':'CHECKPOINT REACHED',1200);this.soundFeedback(720);if(i===0&&this.levelCode==='EXO-1')this.showDiscovery('pulsar')}});this.scienceMilestones.forEach(m=>{if(x>m.x)this.showDiscovery(m.key)});if(x>8940)this.finish()}
+
+  updatePlayHud(time:number){
+    const elapsed=Math.floor((time-this.levelStart)/1000);
+    this.hud.setText(`SCORE ${this.score.toLocaleString()}`);
+    this.dataHud.setText(`${this.collected}/${TOKEN_GOAL}`);
+    this.timeHud.setText(`${Math.floor(elapsed/60)}:${String(elapsed%60).padStart(2,'0')}`);
+    if(this.drawnHealth!==this.health){
+      drawHealth(this.healthIcons,this.health,MAX_HEALTH);
+      this.drawnHealth=this.health;
+    }
+    const scanActive=time<this.scanUntil;
+    this.timerMeters.clear();
+    drawTimer(this.timerMeters,25,63,scanActive?(this.scanUntil-time)/6000:time<this.scanReady?(this.scanReady-time)/9000:1,scanActive?0x8deeff:0x5ce1e6);
+
+    const jump=time<this.boostUntil;
+    const shield=time<this.shieldUntil;
+    const speed=time<this.speedUntil;
+    const powers=[
+      ...(jump?[{label:POWERUPS[this.activeJump].hud,fraction:(this.boostUntil-time)/16000,color:0xccadff}]:[]),
+      ...(shield?[{label:POWERUPS[this.activeShield].hud,fraction:(this.shieldUntil-time)/18000,color:0x8deeff}]:[]),
+      ...(speed?[{label:POWERUPS[this.activeSpeed].hud,fraction:(this.speedUntil-time)/14000,color:0xffd166}]:[]),
+      ...(this.evidenceBonus?[{label:'2× EVIDENCE',fraction:1,color:0xb9f58e}]:[]),
+    ];
+    let left=24;
+    this.powerLabels.forEach((label,i)=>{
+      const power=powers[i];
+      label.setVisible(Boolean(power));
+      if(!power)return;
+      label.setX(left).setText(power.label);
+      drawTimer(this.timerMeters,left+3,125,power.fraction,power.color);
+      left+=Math.max(66,label.width)+10;
+    });
+
+    const {x,y}=this.player;
+    const cues=this.powerCues.clear();
+    if(shield)cues.lineStyle(3,0x8deeff,.85).strokeEllipse(x,y,52,66);
+    if(jump){
+      cues.lineStyle(3,0xccadff,.95);
+      cues.lineBetween(x-14,y+27,x-8,y+34).lineBetween(x-8,y+34,x-2,y+27);
+      cues.lineBetween(x+2,y+27,x+8,y+34).lineBetween(x+8,y+34,x+14,y+27);
+    }
+    if(speed){
+      const trail=this.player.flipX?1:-1;
+      cues.fillStyle(0xffd166,.85).fillRect(x+trail*36-6,y-8,12,3).fillRect(x+trail*30-5,y+1,10,3);
+    }
+    if(this.evidenceBonus)cues.fillStyle(0xb9f58e).fillRect(x-3,y-40,6,6);
+  }
+  updateInteractions(){const x=this.player.x;this.checkpointPoints.forEach((point,i)=>{if(Math.abs(x-point.x)<45&&this.checkpoint.x!==point.x){this.checkpoint={x:point.x,y:point.respawnY};const first=!this.visitedCheckpoints.has(point.x);this.visitedCheckpoints.add(point.x);if(first){this.score+=500;point.flag.setTexture('checkpoint-active');point.marker.setVisible(true);scorePopup(this,point.x,point.y,500)}this.showMessage(first?'CHECKPOINT REACHED   +500':'CHECKPOINT REACHED',1200);this.soundFeedback(720);if(i===0&&this.levelCode==='EXO-1')this.showDiscovery('pulsar')}});this.scienceMilestones.forEach(m=>{if(x>m.x)this.showDiscovery(m.key)});if(x>8940)this.finish()}
   updateBeams(time:number){this.hazards.forEach((beam,i)=>{const cycle=(time+i*2100)%6000;const warning=cycle>3500&&cycle<4500;const active=cycle>=4500;beam.setAlpha(active?.8:warning?.28:.08);beam.setFillStyle(active?0x7df4ff:0x58e6ff);beam.angle=((time/22+i*130)%360);if(active){const line=new Phaser.Geom.Line(beam.getData('originX'),190,beam.getData('originX')+Math.cos(Phaser.Math.DegToRad(beam.angle))*720,190+Math.sin(Phaser.Math.DegToRad(beam.angle))*720);if(Phaser.Geom.Intersects.LineToRectangle(line,this.player.getBounds()))this.hurt()}})}
 }
 
 class TransitScene extends LevelScene{
-  levelCode='EXO-2';introDiscovery='exoplanet';missionLabel='THREE-TRANSIT CHALLENGE';collectibleIcon='📈';transitMilestones=[false,false,false];evidence=0;
+  levelCode='EXO-2';introDiscovery='exoplanet';missionLabel='THREE-TRANSIT CHALLENGE';transitMilestones=[false,false,false];evidence=0;
   constructor(){super('transit')}
   curveHud!:Phaser.GameObjects.Graphics;
   create(){this.transitMilestones=[false,false,false];this.evidence=0;super.create();this.curveHud=this.add.graphics().setScrollFactor(0).setDepth(101);this.drawCurve()}
@@ -284,12 +384,12 @@ class TransitScene extends LevelScene{
   createBackground(){this.starfieldBackground();const g=this.add.graphics().setDepth(1);g.lineStyle(8,0x5ce1e6,.38);const points=[[200,300],[1500,300],[1800,510],[2700,510],[3150,300],[4100,300],[4400,510],[5500,510],[5900,300],[6800,300],[7100,510],[8200,510],[8600,300],[9100,300]];g.beginPath();points.forEach(([x,y],i)=>i?g.lineTo(x,y):g.moveTo(x,y));g.strokePath();[[2250,'TRANSIT 1'],[4950,'TRANSIT 2'],[7650,'TRANSIT 3']].forEach(([x,label])=>{const sx=x as number;this.add.circle(sx,330,330,0xffb13b,.34).setStrokeStyle(24,0xff6b35,.18).setDepth(.5);this.add.circle(sx-85,260,74,0x2a2444,.82).setDepth(.7);this.add.text(sx,165,label as string,{fontFamily:'Arial, sans-serif',fontSize:'30px',fontStyle:'900',color:'#ffd166',stroke:'#07152f',strokeThickness:8}).setOrigin(.5).setDepth(2)});[[700,'OUT OF TRANSIT: FULL STARLIGHT'],[3500,'OUT OF TRANSIT'],[6200,'OUT OF TRANSIT'],[8750,'OUT OF TRANSIT']].forEach(([x,label])=>this.add.text(x as number,230,label as string,{fontFamily:'Arial, sans-serif',fontSize:'18px',fontStyle:'900',color:'#8deeff',stroke:'#07152f',strokeThickness:6}).setOrigin(.5).setDepth(2))}
   photonClimb(x:number){[500,440,380,320].forEach((y,i)=>{this.platform(x+i*105,y,0);for(let p=0;p<4;p++)this.add.circle(x+i*105,540-p*55,5,0xfff3a5,.7).setDepth(2)})}
   buildLevel(){GROUND_SEGMENTS.forEach(([start,end])=>this.ground(start,610,end-start));const upper=[[420,500],[620,430],[820,360],[1020,300],[1260,300],[1500,300],[3300,300],[3600,300],[3900,300],[6000,300],[6300,300],[6600,300],[8650,300],[8900,300]];const lower=[[1800,500],[2050,510],[2300,510],[2550,510],[2750,500],[4400,500],[4650,510],[4900,510],[5150,510],[5400,500],[7100,500],[7350,510],[7600,510],[7850,510],[8100,500]];upper.forEach(([x,y])=>{this.platform(x,y);this.token(x,y-55)});lower.forEach(([x,y])=>{this.platform(x,y);this.token(x,y-55)});this.photonClimb(2850);this.photonClimb(5550);this.photonClimb(8250);TRANSIT_CHECKPOINTS.forEach(([x,y,respawnY])=>this.checkpointFlag(x,y,respawnY));this.powerup(3650,245,'shield','shield');this.powerup(6350,245,'boost','gravity');this.powerup(7750,445,'speed','speed');this.antagonist(2200,440,'binaryEnemy','background-binary');this.antagonist(4800,440,'noiseEnemy','stellar-noise');this.antagonist(7500,440,'glitchEnemy','systematic-noise');this.physics.add.staticImage(9020,520,'goal')}
-  addEvidence(key:string,label:string){this.evidence++;this.drawCurve();this.score+=500;this.showMessage(`EVIDENCE ${this.evidence}/3: ${label}   +500`,1800);this.showDiscovery(key)}
+  addEvidence(key:string,label:string){this.evidence++;this.drawCurve();this.score+=500;scorePopup(this,this.player.x,this.player.y,500);this.showMessage(`EVIDENCE ${this.evidence}/3: ${label}   +500`,1800);this.showDiscovery(key)}
   updateInteractions(){super.updateInteractions();const x=this.player.x;if(x>1850&&x<2800&&this.player.y>365&&!this.transitMilestones[0]){this.transitMilestones[0]=true;this.addEvidence('transit','CONSISTENT DEPTH')}if(x>4500&&x<5550&&this.player.y>365&&!this.transitMilestones[1]){this.transitMilestones[1]=true;this.addEvidence('transitTwo','REPEATING PERIOD')}if(x>7200&&x<8250&&this.player.y>365&&!this.transitMilestones[2]){this.transitMilestones[2]=true;this.addEvidence('transitThree','MATCHING DURATION')}}
 }
 
 class NeutronScene extends LevelScene{
-  levelCode='NS-1';introDiscovery='crust';missionLabel='SURFACE & CRUST DESCENT';collectibleIcon='⚛';
+  levelCode='NS-1';introDiscovery='crust';missionLabel='SURFACE & CRUST DESCENT';
   constructor(){super('neutron')}
   createBackground(){this.cameras.main.setBackgroundColor('#090818');const zones:[[number,number,number,string,string],...Array<[number,number,number,string,string]>]=[[0,2100,0x364d73,'ATMOSPHERE','MAGNETIC FIELD + HOT PLASMA'],[2100,4400,0x5c6077,'OUTER CRUST','IRON-RICH NUCLEI + ELECTRONS'],[4400,7000,0x65415f,'INNER CRUST','NEUTRON DRIP'],[7000,9200,0x513246,'NUCLEAR PASTA','RODS, SLABS, AND TUBES']];zones.forEach(([x0,x1,color,title,sub])=>{this.add.rectangle((x0+x1)/2,GAME_HEIGHT/2,x1-x0,GAME_HEIGHT,color,.48).setDepth(0);this.add.text(x0+120,130,title,{fontFamily:'Arial, sans-serif',fontSize:'34px',fontStyle:'900',color:'#fff',stroke:'#07152f',strokeThickness:8}).setDepth(1);this.add.text(x0+120,178,sub,{fontFamily:'Arial, sans-serif',fontSize:'18px',fontStyle:'900',color:'#d8e7ff',stroke:'#07152f',strokeThickness:5}).setDepth(1)});for(let i=0;i<180;i++)this.add.circle(Phaser.Math.Between(0,WORLD_WIDTH),Phaser.Math.Between(230,560),Phaser.Math.Between(3,9),Phaser.Math.RND.pick([0xffffff,0x7ce9ff,0xff7bc7]),.32).setDepth(1)}
   token(x:number,y:number){const t=this.tokens.create(x,y,'sample') as Phaser.Physics.Arcade.Image;t.setData('baseY',y);t.setData('phase',Phaser.Math.FloatBetween(0,6.28));this.tweens.add({targets:t,angle:360,duration:1500,repeat:-1});return t}
@@ -298,7 +398,7 @@ class NeutronScene extends LevelScene{
 }
 
 class CoreScene extends LevelScene{
-  levelCode='NS-2';introDiscovery='outerCore';missionLabel='NEUTRON STAR CORE DESCENT';collectibleIcon='🌀';
+  levelCode='NS-2';introDiscovery='outerCore';missionLabel='NEUTRON STAR CORE DESCENT';
   constructor(){super('core')}
   createBackground(){this.cameras.main.setBackgroundColor('#050a18');const zones:[[number,number,number,string,string],...Array<[number,number,number,string,string]>]=[[0,2300,0x203d68,'OUTER CORE','SUPERFLUID NEUTRONS'],[2300,4600,0x1c4966,'QUANTIZED VORTICES','ROTATION IN A SUPERFLUID'],[4600,6900,0x3c285d,'INNER CORE','EXTREME-DENSITY MATTER'],[6900,9200,0x5a214e,'OPEN QUESTION','HYPERONS OR QUARKS?']];zones.forEach(([x0,x1,color,title,sub])=>{this.add.rectangle((x0+x1)/2,GAME_HEIGHT/2,x1-x0,GAME_HEIGHT,color,.7);this.add.text(x0+130,130,title,{fontFamily:'Arial, sans-serif',fontSize:'34px',fontStyle:'900',color:'#fff',stroke:'#07152f',strokeThickness:8});this.add.text(x0+130,178,sub,{fontFamily:'Arial, sans-serif',fontSize:'18px',fontStyle:'900',color:'#a8efff',stroke:'#07152f',strokeThickness:5})});for(let i=0;i<130;i++)this.add.circle(Phaser.Math.Between(0,WORLD_WIDTH),Phaser.Math.Between(240,570),Phaser.Math.Between(3,8),Phaser.Math.RND.pick([0x7ce9ff,0xff7bc7,0xffffff]),.35)}
   token(x:number,y:number){const t=this.tokens.create(x,y,'sample') as Phaser.Physics.Arcade.Image;t.setData('baseY',y);t.setData('phase',Phaser.Math.FloatBetween(0,6.28));this.tweens.add({targets:t,angle:-360,duration:1300,repeat:-1});return t}
@@ -322,21 +422,21 @@ class ResearchScene extends LevelScene{
   }
 }
 class MolecularScene extends ResearchScene{
-  levelCode='CM-1';introDiscovery='conjugation';missionLabel='MOLECULAR MATERIALS';collectibleIcon='⬡';variant=0;palette=0x7be4b1;
+  levelCode='CM-1';introDiscovery='conjugation';missionLabel='MOLECULAR MATERIALS';variant=0;palette=0x7be4b1;
   zones=[{start:0,end:2300,title:'CONJUGATED CHAINS',subtitle:'ELECTRONIC STATES IN ORGANIC MOLECULES',color:0x173c39,lesson:'conjugation'},{start:2300,end:4600,title:'ORDERED PACKING',subtitle:'MOLECULAR ALIGNMENT • EASIER TRANSPORT',color:0x295c43,lesson:'packing'},{start:4600,end:6900,title:'DISORDERED PACKING',subtitle:'STRUCTURAL DEFECTS • LOWER MOBILITY',color:0x403956,lesson:'disorder'},{start:6900,end:9200,title:'MATERIAL DESIGN',subtitle:'CONNECT STRUCTURE TO PROPERTIES',color:0x225451,lesson:''}];
   constructor(){super('molecules')}
   createScienceFeatures(){this.scienceZone(3150,850,'HIGH MOBILITY • RUN FASTER',0x7be4b1);this.scienceZone(4900,700,'LOW MOBILITY • RUN SLOWER',0xff8bcf);this.scienceZone(7650,700,'ORDERED PATH • RUN FASTER',0x7be4b1)}
   updateScienceFeatures(time:number){super.updateScienceFeatures(time);const x=this.player.x;if(x>2725&&x<3575||x>7300&&x<8000)this.player.setMaxVelocity(time<this.speedUntil?410:340,900);if(x>4550&&x<5250)this.player.setMaxVelocity(time<this.speedUntil?410:250,900)}
 }
 class ChargeScene extends ResearchScene{
-  levelCode='CM-2';introDiscovery='field';missionLabel='CHARGE TRANSPORT';collectibleIcon='±';variant=1;palette=0x73caff;
+  levelCode='CM-2';introDiscovery='field';missionLabel='CHARGE TRANSPORT';variant=1;palette=0x73caff;
   zones=[{start:0,end:2300,title:'ELECTRIC FIELD',subtitle:'POSITIVE AND NEGATIVE CHARGE',color:0x183b59,lesson:'field'},{start:2300,end:4600,title:'HOPPING TRANSPORT',subtitle:'LOCALIZED ELECTRONIC STATES',color:0x26464d,lesson:'hopping'},{start:4600,end:6900,title:'CHARGE TRAPS',subtitle:'DISORDER CAN LOWER MOBILITY',color:0x493758,lesson:'disorder'},{start:6900,end:9200,title:'DONOR–ACCEPTOR',subtitle:'CHARGE SEPARATION AND COLLECTION',color:0x274e68,lesson:'interface'}];
   constructor(){super('charge')}
   createScienceFeatures(){this.scienceZone(1540,600,'ELECTRIC FIELD • PUSHES YOU RIGHT',0x7ce9ff);this.scienceZone(3300,650,'ENERGY LEDGES • JUMP BETWEEN STATES',0xffd166);this.scienceZone(5050,650,'CHARGE TRAPS • RUN SLOWER',0xff8bcf);this.scienceZone(7750,700,'FIELD ASSIST • RUN FASTER',0x7ce9ff)}
   updateScienceFeatures(time:number){super.updateScienceFeatures(time);const x=this.player.x,b=this.player.body as Phaser.Physics.Arcade.Body;if((x>1240&&x<1840)||(x>7400&&x<8100)){this.player.setMaxVelocity(time<this.speedUntil?410:345,900);if(!b.blocked.down)b.setAccelerationX(b.acceleration.x+120)}if(x>4725&&x<5375)this.player.setMaxVelocity(time<this.speedUntil?410:245,900)}
 }
 class MotionScene extends ResearchScene{
-  levelCode='PER-1';introDiscovery='motion';missionLabel='MOTION LABORATORY';collectibleIcon='📊';variant=2;palette=0xffd166;lab=true;graph!:Phaser.GameObjects.Graphics;graphLabel!:Phaser.GameObjects.Text;history:number[]=[];nextSample=0;
+  levelCode='PER-1';introDiscovery='motion';missionLabel='MOTION LABORATORY';variant=2;palette=0xffd166;lab=true;graph!:Phaser.GameObjects.Graphics;graphLabel!:Phaser.GameObjects.Text;history:number[]=[];nextSample=0;
   zones=[{start:0,end:2300,title:'POSITION & TIME',subtitle:'MEASURE WHERE YOU ARE',color:0x263450,lesson:'motion'},{start:2300,end:4600,title:'CONSTANT VELOCITY',subtitle:'EQUAL DISTANCES IN EQUAL TIMES',color:0x2f4761,lesson:''},{start:4600,end:6900,title:'ACCELERATION',subtitle:'VELOCITY CHANGES WITH TIME',color:0x4a385b,lesson:'acceleration'},{start:6900,end:9200,title:'PROJECTILE MOTION',subtitle:'JUMP AND STUDY THE TRAJECTORY',color:0x3c4c54,lesson:'projectile'}];
   constructor(){super('motion')}
   create(){this.history=[];this.nextSample=0;super.create();this.graph=this.add.graphics().setPosition(990,0).setScrollFactor(0).setDepth(101);this.graphLabel=this.add.text(1022,116,'POSITION vs TIME',{fontFamily:'Arial, sans-serif',fontSize:'13px',fontStyle:'900',color:'#d8f8ff'}).setScrollFactor(0).setDepth(102)}
@@ -344,7 +444,7 @@ class MotionScene extends ResearchScene{
   update(time:number){super.update(time);if(this.paused||this.complete||!this.graph||time<this.nextSample)return;this.nextSample=time+160;const b=this.player.body as Phaser.Physics.Arcade.Body;this.history.push(this.player.x);if(this.history.length>45)this.history.shift();const g=this.graph;g.clear();g.fillStyle(0x07152f,.9).fillRoundedRect(24,109,240,115,8);g.lineStyle(1,0x7695b5).lineBetween(39,204,251,204).lineBetween(39,204,39,144);const lo=Math.min(...this.history),hi=Math.max(lo+300,...this.history);g.lineStyle(2,0xffd166);g.beginPath();this.history.forEach((x,i)=>{const px=40+i*210/44,py=203-(x-lo)/(hi-lo)*58;if(i)g.lineTo(px,py);else g.moveTo(px,py)});g.strokePath();this.graphLabel.setText(`POSITION vs TIME  •  v = ${Math.round(b.velocity.x)} px/s`);for(const p of this.moving){if(p.x>4600&&p.x<6900)p.setVelocityX((70+45*(1+Math.sin(time/650)))*p.getData('direction'))}}
 }
 class LearningScene extends ResearchScene{
-  levelCode='PER-2';introDiscovery='evidence';missionLabel='LEARNING THROUGH DISCOVERY';collectibleIcon='🔎';variant=3;palette=0xe6a5ff;lab=true;completedExperiments=new Set<number>();experimentPanel?:Phaser.GameObjects.Container;experimentOpen=false;experimentIndex=-1;experimentPhase=0;choice=0;prevChoiceA=false;prevChoiceAxis=0;choiceButtons:HTMLButtonElement[]=[];
+  levelCode='PER-2';introDiscovery='evidence';missionLabel='LEARNING THROUGH DISCOVERY';variant=3;palette=0xe6a5ff;lab=true;completedExperiments=new Set<number>();experimentPanel?:Phaser.GameObjects.Container;experimentOpen=false;experimentIndex=-1;experimentPhase=0;choice=0;prevChoiceA=false;prevChoiceAxis=0;choiceButtons:HTMLButtonElement[]=[];
   zones=[{start:0,end:2300,title:'PREDICT',subtitle:'WHAT DO YOU THINK WILL HAPPEN?',color:0x443554,lesson:'evidence'},{start:2300,end:4600,title:'OBSERVE',subtitle:'TEST YOUR MODEL AGAINST EVIDENCE',color:0x34526a,lesson:''},{start:4600,end:6900,title:'EXPLAIN',subtitle:'CONNECT EVIDENCE TO PHYSICS',color:0x4d365d,lesson:''},{start:6900,end:9200,title:'REVISE & REFLECT',subtitle:'GOOD SCIENCE WELCOMES NEW EVIDENCE',color:0x334e58,lesson:''}];
   constructor(){super('discovery')}
   create(){this.completedExperiments.clear();this.experimentPanel=undefined;this.experimentOpen=false;this.experimentIndex=-1;this.experimentPhase=0;super.create();this.input.keyboard?.on('keydown-ONE',()=>this.answer(0));this.input.keyboard?.on('keydown-TWO',()=>this.answer(1));this.input.keyboard?.on('keydown-LEFT',()=>this.selectAnswer(0));this.input.keyboard?.on('keydown-RIGHT',()=>this.selectAnswer(1));this.input.keyboard?.on('keydown-ENTER',(event:KeyboardEvent)=>{if(!event.repeat&&!(event.target instanceof HTMLButtonElement))this.answer(this.choice)})}
@@ -367,8 +467,16 @@ class LearningScene extends ResearchScene{
     this.choice = index;
     this.choiceButtons.forEach((button, i) => button.classList.toggle('selected', i === index));
   }
-  answer(i:number){if(!this.experimentOpen||this.experimentPhase===2)return;const e=EXPERIMENTS[this.experimentIndex];if(this.experimentPhase===0){this.experimentPhase=2;hideCard();const panel=this.add.rectangle(640,360,880,470,0x07152f,.99).setStrokeStyle(5,0xe6a5ff);const title=this.add.text(640,165,'OBSERVE THE EXPERIMENT',{fontFamily:'Arial, sans-serif',fontSize:'27px',fontStyle:'900',color:'#ffd166'}).setOrigin(.5);const a=this.add.circle(480,260,22,0xffd166);const b=this.add.circle(800,260,35,0x5ce1e6);const floor=this.add.rectangle(640,510,650,7,0x8deeff);const caption=this.add.text(640,550,e.observation,{fontFamily:'Arial, sans-serif',fontSize:'18px',color:'#fff'}).setOrigin(.5);this.experimentPanel=this.add.container(0,0,[panel,title,a,b,floor,caption]).setScrollFactor(0).setDepth(350);const n=this.experimentIndex;const targets=n===0?[{targets:a,y:484,duration:900,ease:'Quad.in'},{targets:b,y:471,duration:900,ease:'Quad.in'}]:n===1?[{targets:a,x:780,duration:1000,ease:'Linear'},{targets:b,alpha:0,duration:300}]:[{targets:a,x:345,duration:900},{targets:b,x:935,duration:900}];targets.forEach(t=>this.tweens.add(t));this.time.delayedCall(1500,()=>{if(this.experimentPanel){this.experimentPhase=1;this.renderExperiment()}});return}const correct=i===e.answer;this.completedExperiments.add(this.experimentIndex);hideCard();this.experimentOpen=false;touchControls.show(true);this.physics.resume();this.paused=false;if(correct){const reward=this.evidenceBonus?1000:500;this.evidenceBonus=false;this.score+=reward;this.showMessage(`EVIDENCE-BASED EXPLANATION  +${reward}`,1600);this.soundFeedback(850)}else this.showMessage(`CORRECT EXPLANATION: ${e.explanations[e.answer]}`,2500)}
+  answer(i:number){if(!this.experimentOpen||this.experimentPhase===2)return;const e=EXPERIMENTS[this.experimentIndex];if(this.experimentPhase===0){this.experimentPhase=2;hideCard();const panel=this.add.rectangle(640,360,880,470,0x07152f,.99).setStrokeStyle(5,0xe6a5ff);const title=this.add.text(640,165,'OBSERVE THE EXPERIMENT',{fontFamily:'Arial, sans-serif',fontSize:'27px',fontStyle:'900',color:'#ffd166'}).setOrigin(.5);const a=this.add.circle(480,260,22,0xffd166);const b=this.add.circle(800,260,35,0x5ce1e6);const floor=this.add.rectangle(640,510,650,7,0x8deeff);const caption=this.add.text(640,550,e.observation,{fontFamily:'Arial, sans-serif',fontSize:'18px',color:'#fff'}).setOrigin(.5);this.experimentPanel=this.add.container(0,0,[panel,title,a,b,floor,caption]).setScrollFactor(0).setDepth(350);const n=this.experimentIndex;const targets=n===0?[{targets:a,y:484,duration:900,ease:'Quad.in'},{targets:b,y:471,duration:900,ease:'Quad.in'}]:n===1?[{targets:a,x:780,duration:1000,ease:'Linear'},{targets:b,alpha:0,duration:300}]:[{targets:a,x:345,duration:900},{targets:b,x:935,duration:900}];targets.forEach(t=>this.tweens.add(t));this.time.delayedCall(1500,()=>{if(this.experimentPanel){this.experimentPhase=1;this.renderExperiment()}});return}const correct=i===e.answer;this.completedExperiments.add(this.experimentIndex);hideCard();this.experimentOpen=false;touchControls.show(true);this.physics.resume();this.paused=false;if(correct){const reward=this.evidenceBonus?1000:500;this.evidenceBonus=false;this.score+=reward;scorePopup(this,this.player.x,this.player.y,reward);this.showMessage(`EVIDENCE-BASED EXPLANATION  +${reward}`,1600);this.soundFeedback(850)}else this.showMessage(`CORRECT EXPLANATION: ${e.explanations[e.answer]}`,2500)}
   update(time:number){const pad=this.input.gamepad?.getPad(0);if(this.experimentOpen&&this.experimentPhase!==2){const axis=pad?.axes[0]?.getValue()??0;const direction=axis>.5||pad?.right?1:axis<-.5||pad?.left?-1:0;const a=Boolean(pad?.A);if(direction&&direction!==this.prevChoiceAxis)this.selectAnswer(direction>0?1:0);if(a&&!this.prevChoiceA)this.answer(this.choice);this.prevChoiceA=a;this.prevChoiceAxis=direction}super.update(time)}
 }
 const config:Phaser.Types.Core.GameConfig={type:Phaser.AUTO,parent:'game',width:GAME_WIDTH,height:GAME_HEIGHT,backgroundColor:'#050a20',pixelArt:true,roundPixels:true,audio:{disableWebAudio:true},physics:{default:'arcade',arcade:{gravity:{x:0,y:1450},debug:false}},scale:{mode:Phaser.Scale.FIT,autoCenter:Phaser.Scale.CENTER_BOTH},scene:[BootScene,MenuScene,LevelScene,TransitScene,NeutronScene,CoreScene,MolecularScene,ChargeScene,MotionScene,LearningScene],input:{gamepad:true,windowEvents:false}};
-new Phaser.Game(config);
+const game = new Phaser.Game(config);
+const playfield = document.querySelector<HTMLElement>('#game')!;
+game.events.once(Phaser.Core.Events.READY, () => {
+  const observer = new ResizeObserver(() => {
+    if (game.scale.getParentBounds()) game.scale.refresh();
+  });
+  observer.observe(playfield);
+  game.events.once(Phaser.Core.Events.DESTROY, () => observer.disconnect());
+});

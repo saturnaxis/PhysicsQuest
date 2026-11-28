@@ -25,7 +25,7 @@
   padding: 0 12px;
   border: 2px solid #5ce1e6;
   border-radius: 12px;
-  background: #07152fdb;
+  background: #07152fad;
   color: white;
   font: 800 15px system-ui, sans-serif;
   pointer-events: auto;
@@ -33,6 +33,8 @@
   -webkit-tap-highlight-color: transparent;
 }
 .touch-layout #touch-controls button[data-held], .touch-layout #touch-controls button:active { background: #5ce1e6; color: #07152f; }
+.touch-layout #touch-controls .directions button { border-radius: 6px; }
+.touch-layout #touch-controls .actions button { border-radius: 24px; }
 .touch-layout #touch-controls.paused .directions, .touch-layout #touch-controls.paused .actions { visibility: hidden; }
 
 @media (orientation: portrait) {
@@ -41,12 +43,37 @@
     position: absolute;
     inset: 0;
     z-index: 3;
-    display: grid;
-    place-items: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 14px;
     padding: 24px;
     background: #07152f;
     text-align: center;
   }
+}
+#rotate-hint h1 { margin: 0; color: #5ce1e6; font-size: clamp(30px, 9vw, 52px); line-height: 1.05; }
+#rotate-hint h1 span { color: #fff; font-size: .72em; }
+#rotate-hint p { margin: 0; }
+#welcome-lion { object-fit: contain; image-rendering: pixelated; }
+.rotate-phone { display: grid; place-items: center; width: 54px; height: 34px; color: #ffd166; border: 3px solid currentColor; font-size: 22px; line-height: 1; }
+
+#first-expedition { display: none; }
+.touch-layout #first-expedition:not([hidden]) {
+  display: block;
+  position: absolute;
+  z-index: 1;
+  inset-block-start: calc((100cqh - min(100cqh, 56.25cqw)) / 2 + min(100cqh, 56.25cqw) * .78);
+  inset-inline-start: calc((100cqw - min(100cqw, 177.778cqh)) / 2 + min(100cqw, 177.778cqh) * .05);
+  min-height: 44px;
+  padding: 0 12px;
+  border: 2px solid #ffe7a3;
+  border-radius: 6px;
+  background: #ffd166;
+  color: #07152f;
+  font: 800 13px system-ui, sans-serif;
+  touch-action: manipulation;
 }
 
 #game-shell {
@@ -62,6 +89,11 @@
   width: auto;
   height: auto;
   background: #050a20;
+}
+@media (orientation: landscape) {
+  .touch-layout #game-shell.playing #game {
+    bottom: calc(env(safe-area-inset-bottom) + clamp(18px, 5dvh, 28px) + 52px);
+  }
 }
 #fullscreen {
   position: fixed;
@@ -121,6 +153,31 @@
 #card-buttons button.selected { border-color: #5ce1e6; background: #fff2c4; }
 
 #game { container-type: size; }
+#game-updates {
+  position: absolute;
+  z-index: 1;
+  inset-block-start: calc((100cqh - min(100cqh, 56.25cqw)) / 2 + min(100cqh, 56.25cqw) * .045);
+  inset-inline-start: 61%;
+  transform: translateX(-50%);
+  max-width: 35%;
+  text-align: center;
+}
+#check-update {
+  min-height: 44px;
+  padding: 0 9px;
+  border: 1px solid #5ce1e6;
+  border-radius: 8px;
+  background: #07152f;
+  color: #fff;
+  font: 700 13px system-ui, sans-serif;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+#update-status {
+  margin: 2px 0 0;
+  color: #b9d4ef;
+  font-size: clamp(10px, 2.2cqh, 14px);
+}
 #discovery-announcements {
   position: absolute;
   z-index: 1;

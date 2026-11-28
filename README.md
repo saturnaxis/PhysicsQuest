@@ -64,7 +64,7 @@ Discoveries appear briefly below the upper-left HUD while you play. The Discover
 2. Launch the game from its home-screen icon and rotate to landscape. Hold a movement arrow with one thumb and tap **Jump** or **Scan** with the other. The Discovery Journal, lab answers, and mission results use touch-friendly buttons.
 3. For offline play, launch online first and allow the game and music to finish caching. To check the cache, turn on airplane mode and relaunch.
 
-When updating an installed copy, close open game tabs and app windows, then reopen online.
+On the main menu, select **Check for updates**, then **Update now** when one is available. The game restarts and shows the running version under the button. If your installed copy predates the update button, open it online so it can download the new build, then close all game tabs and windows and reopen it online.
 
 ## Develop locally
 
@@ -91,9 +91,9 @@ Under **Settings → Pages**, select **GitHub Actions** as the source. The workf
 
 When upgrading from the old workflow, remove the tracked `docs/` export with `git rm -r docs/` and commit its removal with the workflow update. Keep source assets in `public/`. The generated `dist/` folder is gitignored.
 
-## Kiosk and audio
+## Planetarium lobby and audio
 
-For the planetarium lobby, launch the deployed page in a Chromium-based browser’s kiosk mode. The playfield retains a 16:9 aspect ratio. Scores, avatar choice, volume, and completed-run counts are saved locally in the browser. The game requires no account.
+The planetarium lobby QR code opens the deployed game page on the visitor’s phone. Rotate to landscape, then tap **Play Exoplanet Explorer** or choose a research area and level. Installation is optional. Scores, avatar choice, volume, and completed-run counts are saved locally in the browser.
 
 Music defaults to 10% volume and adjusts in five-percentage-point steps. Browsers may require a click, tap, or keypress before music starts. The nine MP3s stream through HTML audio, with loudness compensation matched to −20.3 LUFS before the master volume. Scene changes fade music in over 750 ms and out over 500 ms. Short sound effects reuse a single audio context.
 

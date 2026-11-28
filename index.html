@@ -21,6 +21,11 @@
       <div id="discovery-announcements" role="status" aria-atomic="true">
         <div id="discovery-toast" hidden></div>
       </div>
+      <section id="game-updates" aria-label="Game updates" hidden>
+        <button id="check-update" type="button">Check for updates</button>
+        <p id="update-status" role="status"></p>
+      </section>
+      <button id="first-expedition" type="button" hidden>Play Exoplanet Explorer</button>
     </main>
     <dialog id="discovery-journal" aria-labelledby="journal-title">
       <h2 id="journal-title">Discovery Journal</h2>
@@ -49,7 +54,13 @@
         <div id="card-buttons"></div>
       </div>
     </section>
-    <aside id="rotate-hint">Rotate your device to play in landscape.</aside>
+    <aside id="rotate-hint">
+      <img id="welcome-lion" width="88" height="116" alt="" hidden>
+      <h1>Physics Quest<br><span>Research Run</span></h1>
+      <p>East Texas A&amp;M University · Physics &amp; Astronomy</p>
+      <span class="rotate-phone" aria-hidden="true">↻</span>
+      <p>Rotate your phone sideways to play.</p>
+    </aside>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>
