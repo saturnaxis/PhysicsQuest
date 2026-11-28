@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#07152f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="%BASE_URL%manifest.webmanifest">
+  <link rel="apple-touch-icon" href="%BASE_URL%icons/icon-192.png">
+  <title>Physics Quest: Exoplanet Explorer</title>
+  <script async src="https://www.googletagmanager.com/gtm.js?id=GTM-TXMJ9GXB"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+  </script>
+</head>
+<body>
+  <div id="game-shell">
+    <main id="game" aria-label="Physics Quest astronomy platform game">
+      <div id="discovery-announcements" role="status" aria-atomic="true">
+        <div id="discovery-toast" hidden></div>
+      </div>
+    </main>
+    <dialog id="discovery-journal" aria-labelledby="journal-title">
+      <h2 id="journal-title">Discovery Journal</h2>
+      <form method="dialog"><button type="submit" autofocus>Close</button></form>
+      <div id="journal-entries" tabindex="0"></div>
+    </dialog>
+    <div id="touch-controls" role="group" aria-label="Touch controls" hidden>
+      <div class="directions">
+        <button type="button" data-control="left" aria-label="Move left">◀</button>
+        <button type="button" data-control="right" aria-label="Move right">▶</button>
+      </div>
+      <button type="button" data-control="pause">Pause</button>
+      <div class="actions">
+        <button type="button" data-control="scan">Scan</button>
+        <button type="button" data-control="jump">Jump</button>
+      </div>
+    </div>
+    <button id="fullscreen" type="button" hidden>Full screen</button>
+    <section id="game-card" role="dialog" aria-modal="true" aria-labelledby="card-title" hidden>
+      <div class="card-panel">
+        <div class="card-content">
+          <h2 id="card-title" tabindex="-1"></h2>
+          <p id="card-body"></p>
+          <p id="card-note"></p>
+        </div>
+        <div id="card-buttons"></div>
+      </div>
+    </section>
+    <aside id="rotate-hint">Rotate your device to play in landscape.</aside>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
